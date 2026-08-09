@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TicketDesk Progress Tracker — Trainer Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="page">
+    <nav class="navbar">
+      <a href="/" class="navbar-brand">TicketDesk Progress Tracker</a>
+      <div class="navbar-links">
+        <a href="/" class="nav-link">Checklist</a>
+        <a href="/admin" class="nav-link active">Trainer Dashboard</a>
+        <a href="/login" class="nav-link" data-logout>Logout</a>
+      </div>
+    </nav>
+
+    <header class="topbar">
+      <h1>Trainer Dashboard</h1>
+    </header>
+
+    <section class="summary-bar">
+      <div class="summary-item">
+        <span id="summary-started">0</span>
+        <label>Started</label>
+      </div>
+      <div class="summary-item">
+        <span id="summary-completed-all">0</span>
+        <label>Completed all 30</label>
+      </div>
+      <div class="summary-item">
+        <span id="summary-average">0%</span>
+        <label>Average completion</label>
+      </div>
+    </section>
+
+    <section class="controls">
+      <input id="search-input" type="text" placeholder="Search by registration number..." />
+      <button id="refresh-btn" type="button">Refresh</button>
+      <button id="export-pdf-btn" type="button">Export Report (PDF)</button>
+      <button id="export-csv-btn" type="button">Export Report (CSV)</button>
+    </section>
+
+    <div class="table-wrapper">
+      <table id="students-table">
+        <thead>
+          <tr>
+            <th data-sort="registration_number">Registration Number</th>
+            <th data-sort="backend_completed">Backend+DB</th>
+            <th data-sort="frontend_completed">Frontend</th>
+            <th data-sort="total_completed">Total</th>
+            <th data-sort="total_verified">Verified</th>
+            <th data-sort="updated_at">Last Updated</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="students-tbody"></tbody>
+      </table>
+    </div>
+    <p id="empty-state" class="hint" hidden>No students have started yet.</p>
+  </div>
+
+  <script src="/js/auth-nav.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

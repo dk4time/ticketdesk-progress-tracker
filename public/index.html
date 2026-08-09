@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>TicketDesk Progress Tracker</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="page">
+    <nav class="navbar">
+      <a href="/" class="navbar-brand">TicketDesk Progress Tracker</a>
+      <div class="navbar-links">
+        <a href="/" class="nav-link active">Checklist</a>
+        <a href="/admin" class="nav-link">Trainer Dashboard</a>
+        <a href="/login" class="nav-link" data-logout>Logout</a>
+      </div>
+    </nav>
+
+    <main id="landing-view" class="view">
+      <div class="card">
+        <h2>Enter your registration number</h2>
+        <p class="hint">
+          Use the same registration number each day so your status carries
+          over from Day 1 to Day 2.
+        </p>
+        <form id="landing-form">
+          <input
+            id="reg-input"
+            type="text"
+            placeholder="e.g. 21BCE1234"
+            autocomplete="off"
+            required
+          />
+          <button type="submit">View status</button>
+        </form>
+        <p id="landing-error" class="error" hidden></p>
+      </div>
+    </main>
+
+    <main id="checklist-view" class="view" hidden>
+      <div class="checklist-header">
+        <div class="row">
+          <div>
+            <span class="reg-badge" id="reg-display"></span>
+            <button id="switch-btn" class="link-btn" type="button">Not you? Switch</button>
+          </div>
+        </div>
+        <div class="totals" id="totals-display">Backend+DB: 0/16 · Frontend: 0/14 · Total: 0/30</div>
+        <p class="hint">
+          This page is read-only. Run <code>npm run self-check</code> in your
+          project to update it.
+        </p>
+      </div>
+
+      <section class="category">
+        <h2>Backend + Database <span class="count" id="backend-count">0/16</span></h2>
+        <ul class="items" id="backend-list"></ul>
+      </section>
+
+      <section class="category">
+        <h2>Frontend <span class="count" id="frontend-count">0/14</span></h2>
+        <ul class="items" id="frontend-list"></ul>
+      </section>
+    </main>
+  </div>
+
+  <script src="/js/auth-nav.js"></script>
+  <script src="/js/student.js"></script>
+</body>
+</html>
