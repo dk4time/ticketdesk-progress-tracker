@@ -68,9 +68,18 @@
       tr.appendChild(cell(`${s.frontend_completed}/${s.frontend_total}`));
       tr.appendChild(cell(`${s.total_completed}/${s.total_items}`));
       tr.appendChild(cell(`${s.total_verified}/${s.total_items}`));
+      tr.appendChild(cell(s.locked_ip || '-'));
       tr.appendChild(cell(s.updated_at ? new Date(s.updated_at).toLocaleString() : '-'));
 
       const actionTd = document.createElement('td');
+
+      if (s.locked_ip) {
+        const unlockBtn = document.createElement('button');
+        unlockBtn.textContent = 'Unlock IP';
+        unlockBtn.addEventListener('click', () => unlockStudentIp(s.registration_number));
+        actionTd.appendChild(unlockBtn);
+      }
+
       const delBtn = document.createElement('button');
       delBtn.textContent = 'Delete';
       delBtn.className = 'danger-btn';
@@ -95,6 +104,17 @@
       await loadStudents();
     } catch (err) {
       alert('Could not delete this entry.');
+    }
+  }
+
+  async function unlockStudentIp(reg) {
+    if (!confirm(`Clear the locked IP for ${reg}? Their recorded progress is kept — they'll just be able to report from a new device/network again.`)) return;
+    try {
+      const res = await fetch(`/api/admin/students/${encodeURIComponent(reg)}/unlock-ip`, { method: 'PATCH' });
+      if (!res.ok) throw new Error('Unlock failed');
+      await loadStudents();
+    } catch (err) {
+      alert('Could not unlock this entry.');
     }
   }
 

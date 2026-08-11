@@ -1,8 +1,9 @@
 # TicketDesk Progress Tracker
 
-A small, standalone local web app for tracking student progress on the
-30-item TicketDesk Student TODO Worksheet during the workshop. Runs entirely
-on the trainer's laptop, over classroom WiFi, with no internet dependency.
+A small web app for tracking student progress on the 30-item TicketDesk
+Student TODO Worksheet during the workshop. Hosted on Render at a stable
+public URL so students report results over the internet instead of
+depending on shared classroom WiFi.
 
 This is independent of the TicketDesk project itself in every respect except
 one: each student's own machine reports results here by calling
@@ -16,7 +17,7 @@ own `npm run self-check` run posts real results.
 ## Tech stack
 
 - Node.js + Express
-- SQLite via `better-sqlite3` (single local file: `data/progress.db`)
+- MongoDB (Atlas) via Mongoose — see "Persistence" below
 - Plain HTML/CSS/JS frontend, no build step
 - `pdfkit` for PDF export
 
@@ -24,10 +25,11 @@ own `npm run self-check` run posts real results.
 
 ```
 npm install
+cp .env.example .env   # fill in MONGODB_URI at minimum
 npm start
 ```
 
-That's it. On startup the console prints the local network URL, e.g.:
+On startup the console prints the local network URL, e.g.:
 
 ```
 =================================================
@@ -36,8 +38,35 @@ That's it. On startup the console prints the local network URL, e.g.:
 =================================================
 ```
 
-Students open that URL on their own laptop/phone, on the same WiFi network.
-The trainer opens the `/admin` URL for the live dashboard.
+That URL is only meaningful for local/LAN use — in the hosted deployment,
+students use the Render URL directly instead.
+
+## Persistence (MongoDB Atlas)
+
+All student progress lives in MongoDB Atlas, not on Render's local disk.
+Render's filesystem doesn't reliably survive redeploys, restarts, or plan
+changes even with a Disk attached — Atlas is external to Render entirely, so
+none of that can take student data with it.
+
+Set `MONGODB_URI` (see `.env.example`) to a full Atlas connection string
+including the database name, e.g.:
+
+```
+mongodb+srv://<user>:<password>@<cluster>.mongodb.net/ticketdesk_progress
+```
+
+**Atlas setup, one-time:**
+1. Create a free M0 cluster (or reuse an existing one) and a database user
+   with read/write access.
+2. Under Network Access, allow Render's traffic. Render doesn't have a
+   static outbound IP on non-dedicated plans, so this usually means adding
+   `0.0.0.0/0` to the IP access list (unless you're on Render's static-IP
+   add-on, in which case allow-list that IP specifically).
+3. Copy the connection string into `MONGODB_URI` — on Render, this is set
+   under the service's Environment settings; locally, in `.env`.
+
+The app fails fast with a clear error at startup if `MONGODB_URI` is
+missing.
 
 ## Login
 
@@ -86,16 +115,37 @@ If a registration number has never had a self-check run, every item shows
 as "Not tested yet," never as failed — failed only means a check genuinely
 ran and didn't pass.
 
+**One IP per registration number**: `POST /api/verify` locks each
+registration number to the IP address it first successfully reports results
+from. Later reports must come from that same IP; that IP also can't be
+reused to report under a different registration number. This is what stops
+one student from running `npm run self-check` on a laptop that already has
+someone else's passing solution under their own registration number — the
+second (different) registration number gets rejected with a 403 the moment
+it tries to report from that laptop. It only applies to `POST /api/verify`,
+not to viewing a status page, so checking your own progress from a second
+device is unaffected.
+
+This relies on students being on individual networks (mobile hotspot, home
+broadband) rather than one shared classroom router — if many students sit
+behind the same NAT'd public IP, they'll appear as one IP to this app and
+the lock will misfire. It also means a genuine IP change (new laptop, an
+ISP reassigning a dynamic IP between workshop days, reconnecting to a
+different hotspot) will get blocked too. Either case shows up as a 403 in
+the student's terminal; from the `/admin` dashboard, click **Unlock IP** on
+that student's row to clear the lock without losing their recorded
+progress, then they can report again from wherever they're on now.
+
 ## Day-to-day use
 
-- **Day 1**: `npm start`, share the printed URL. Students open it, enter
-  their registration number to view their status (all "Not tested yet"
-  until their first `npm run self-check`), and run `npm run self-check` from
-  the TicketDesk repo whenever they want to check progress or report it here.
-- **Stopping for the day**: just stop the process (Ctrl+C). All progress is
-  saved in `data/progress.db` and is not lost.
-- **Day 2**: `npm start` again. Students enter the same registration number
-  and their Day 1 status is still there.
+- **Day 1**: share the Render URL. Students open it, enter their
+  registration number to view their status (all "Not tested yet" until
+  their first `npm run self-check`), and run `npm run self-check` from the
+  TicketDesk repo whenever they want to check progress or report it here.
+- **Between days**: nothing to do — progress lives in Atlas, independent of
+  whether the Render service restarts, redeploys, or sits idle.
+- **Day 2**: students enter the same registration number and their Day 1
+  status is still there.
 
 ## Trainer dashboard (`/admin`)
 
@@ -108,6 +158,8 @@ ran and didn't pass.
 - Click any column header to sort by it
 - Search box to filter by registration number
 - Refresh button (the table also auto-refreshes every 10 seconds)
+- **Locked IP** column, and an **Unlock IP** button per row (only shown once
+  a lock exists) — see "One IP per registration number" above
 - Delete button per row, for removing a duplicate/mistyped registration
   number entry
 - Summary strip: how many students have started, how many have completed
@@ -126,20 +178,25 @@ before generating the final report for a given run.
 
 ```
 ticketdesk-progress-tracker/
-├── server.js              # entry point, binds 0.0.0.0, prints LAN URL
+├── server.js              # entry point: trust proxy, connects to Mongo, binds 0.0.0.0
 ├── src/
-│   ├── db.js               # better-sqlite3 connection + schema (+ migration)
+│   ├── db.js               # mongoose connection helper
+│   ├── models/
+│   │   ├── Student.js       # registrationNumber, lockedIp (+ unique sparse index), timestamps
+│   │   └── ItemCompletion.js # one row per (student, item)
 │   ├── items.js             # hardcoded 30-item catalog
-│   ├── progress.js          # all student/progress data access
-│   ├── network.js           # local IP detection
+│   ├── progress.js          # all student/progress data access + IP-lock logic
+│   ├── network.js           # local IP detection (LAN URL printed at boot)
 │   ├── pdfExport.js         # PDF report generation
 │   ├── csvExport.js         # CSV report generation
 │   ├── auth.js              # PIN check + session-gate middleware
 │   ├── gradingAuth.js       # x-grading-key check for POST /api/verify
 │   └── routes/
 │       ├── student.js       # student-facing API (read-only status)
-│       ├── admin.js         # trainer dashboard API
-│       └── verify.js        # POST /api/verify — self-check results in
+│       ├── admin.js         # trainer dashboard API, incl. unlock-ip
+│       └── verify.js        # POST /api/verify — self-check results in, IP lock enforced
+├── scripts/
+│   └── migrate-sqlite-to-mongo.js  # one-off: old data/progress.db -> Atlas
 ├── public/
 │   ├── index.html           # student landing + checklist page
 │   ├── admin.html            # trainer dashboard page
@@ -150,9 +207,28 @@ ticketdesk-progress-tracker/
 │       ├── admin.js
 │       ├── login.js
 │       └── auth-nav.js       # wires up the navbar Logout link
-└── data/
-    └── progress.db           # created automatically on first run
+└── .env.example
 ```
+
+## Migrating from the old SQLite deployment (one-time)
+
+If you're moving an existing deployment from `better-sqlite3` to Atlas
+without losing what's already there:
+
+1. Deploy this version of the code with `MONGODB_URI` set, but **before**
+   detaching the old Render Disk — `data/progress.db` needs to still be
+   present in the container filesystem for the migration script to read.
+2. Open Render's Shell tab for the service and run:
+   ```
+   npm run migrate:mongo
+   ```
+   This reads every row out of `data/progress.db` and upserts it into
+   Atlas. It's insert-only (never overwrites), so it's safe to run more
+   than once and safe even if students have already reported fresh results
+   to the new Mongo-backed app before you get to run it.
+3. Reload `/admin` and spot-check a few registration numbers against what
+   was there before.
+4. Once confirmed, the Render Disk is no longer needed and can be detached.
 
 ## Notes
 

@@ -18,7 +18,7 @@ function isValidResultEntry(entry) {
 // TicketDesk repo (see grading/self-check.js there); reject silently-wrong
 // payloads with 400 rather than crashing, since this runs unattended from
 // 100+ students' laptops over classroom WiFi.
-router.post('/', requireGradingKey, (req, res) => {
+router.post('/', requireGradingKey, async (req, res) => {
   const { registrationNumber, results } = req.body || {};
   const normalized = progress.normalizeRegNumber(registrationNumber);
 
@@ -37,8 +37,26 @@ router.post('/', requireGradingKey, (req, res) => {
     return res.status(400).json({ error: 'Each result entry needs a valid category, itemNumber, and boolean passed.' });
   }
 
+  // One registration number per IP and vice versa — stops a student from
+  // running self-check with someone else's already-passing solution on a
+  // laptop that isn't theirs. Only enforced here, not on the read-only
+  // status endpoints, since checking your own progress from a second
+  // device is normal and not an integrity risk. The message shown to the
+  // student is deliberately generic; the other registration number
+  // involved is only ever logged server-side for the trainer.
   try {
-    const data = progress.applyVerifiedResults(normalized, results);
+    await progress.checkAndLockIp(normalized, req.ip);
+  } catch (err) {
+    if (err instanceof progress.IpLockConflictError) {
+      console.error('POST /api/verify blocked by IP lock:', err.details);
+      return res.status(403).json({ error: err.message });
+    }
+    console.error('POST /api/verify IP check failed:', err);
+    return res.status(500).json({ error: 'Could not record results.' });
+  }
+
+  try {
+    const data = await progress.applyVerifiedResults(normalized, results);
     res.json({ ok: true, registration_number: normalized, counts: data.counts });
   } catch (err) {
     console.error('POST /api/verify failed:', err);
